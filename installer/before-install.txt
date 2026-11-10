@@ -1,0 +1,37 @@
+BEFORE YOU INSTALL
+
+1. Install VM Switcher on BOTH Hyper-V servers (Windows Server 2016 or newer,
+   signed in as an administrator):
+     10.10.140.160  runs the PRIMARY VM   (VirtuoSIS_16.0.0_IICC)
+     10.10.140.140  runs the SECONDARY VM (VirtuoSIS_16.0.0_IICC_STANDBY)
+   Type the SAME values and the SAME shared key on both servers.
+   Each copy finds out by itself which VM it holds.
+
+2. The two copies talk to each other on TCP port 47160 and ping each other.
+   The installer opens the Windows Firewall for this, but only for the other
+   server. Any other firewall between the servers must allow it too.
+
+3. VM health comes from the Hyper-V "Heartbeat" integration service.
+   It must be enabled for both VMs: Hyper-V Manager > VM > Settings >
+   Integration Services > Heartbeat. The self-test checks this.
+
+4. The two servers' clocks must be within 5 minutes of each other
+   (Windows Time service). Requests with a larger difference are refused.
+
+5. Both VMs use the SAME IP address, so they must never run together. VM Switcher
+   holds a starting Primary paused, shuts the Secondary down cleanly (no data
+   loss), then lets the Primary continue. On the
+   Primary server set: Hyper-V Manager > Primary VM > Settings > Automatic Start
+   Action = "Always start automatically" with a startup delay of 60 seconds,
+   so VM Switcher is running before the Primary comes up after a reboot.
+   VM Switcher waits 5 minutes after a server reboot before it fails over.
+
+6. Nothing else is needed. VM Switcher only uses parts that already exist in
+   Windows (PowerShell, Hyper-V tools, and the built-in SQLite engine).
+
+What gets installed on each server:
+  - VM Switcher Watchdog (Windows service, starts with Windows)
+  - VM Switcher (windowed app with health lights; it never jumps in front of
+    your work, it flashes in the taskbar instead)
+  - VM Switcher Terminal (numbered menu)
+  - Data and logs in C:\ProgramData\VMSwitcher

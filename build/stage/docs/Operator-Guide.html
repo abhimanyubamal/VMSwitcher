@@ -1,0 +1,115 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VM Switcher Operator Guide</title>
+<style>
+  :root { --bg:#0b1220; --card:#111a2e; --line:#1e2a44; --text:#e5e7eb; --muted:#94a3b8; --accent:#38bdf8;
+          --green:#22c55e; --yellow:#facc15; --grey:#9ca3af; --dark:#1f2937; --red:#f87171; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.55 "Segoe UI", system-ui, sans-serif; }
+  main { max-width:900px; margin:0 auto; padding:28px 16px 60px; }
+  h1 { font-size:30px; margin:0 0 4px; }
+  h2 { font-size:20px; margin:34px 0 10px; color:#fff; }
+  p.lead { color:var(--muted); margin:0 0 20px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:14px; padding:16px 18px; margin:10px 0; }
+  .lights { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:10px; }
+  .light { display:flex; gap:12px; align-items:center; }
+  .dot { width:28px; height:28px; border-radius:50%; flex:none; border:3px solid #0b1220; }
+  .g { background:var(--green); box-shadow:0 0 14px var(--green); }
+  .y { background:var(--yellow); box-shadow:0 0 14px var(--yellow); }
+  .e { background:var(--grey); box-shadow:0 0 8px var(--grey); }
+  .d { background:var(--dark); border-color:#334155; }
+  .b { background:var(--green); animation:blink 1s infinite; }
+  @keyframes blink { 50% { opacity:.25; } }
+  table { width:100%; border-collapse:collapse; }
+  td, th { text-align:left; padding:9px 8px; border-bottom:1px solid var(--line); vertical-align:top; }
+  th { color:var(--muted); font-weight:600; font-size:14px; }
+  .num { display:inline-flex; width:30px; height:30px; border-radius:50%; background:#0ea5e9; color:#fff; font-weight:700; align-items:center; justify-content:center; }
+  .warn { border-color:#b45309; background:#2a2008; }
+  .bad { border-color:#b91c1c; background:#2a1216; }
+  code { background:#1e293b; padding:1px 6px; border-radius:5px; }
+  small, .muted { color:var(--muted); }
+  @media (max-width:600px) { td, th { padding:8px 4px; font-size:14px; } }
+</style>
+</head>
+<body>
+<main>
+  <h1>VM Switcher Operator Guide</h1>
+  <p class="lead">One page. Read it once and you can run the system.</p>
+
+  <div class="card">
+    <b>What it does.</b> Two virtual machines run the VirtuoSIS IICC service. The <b>Primary</b> normally serves everyone.
+    The <b>Secondary</b> is the spare and is normally OFF. If the Primary stops or freezes, or its whole server goes down,
+    VM Switcher wakes the Secondary within about 10 seconds. You do not need to do anything for that to happen.
+  </div>
+  <div class="card">
+    <b>Two servers, same app.</b> The Primary runs on server <code>10.10.140.160</code> and the Secondary on server
+    <code>10.10.140.140</code>. VM Switcher is installed on both and they keep each other informed, so you can use
+    <b>either</b> server: you see both VMs and every button works on both. The top line says which server you are on.
+    The pill <i>Other server: connected</i> must be green.
+  </div>
+
+  <h2>1. Read the lights</h2>
+  <div class="lights">
+    <div class="card light"><span class="dot g"></span><div><b>Green: OK</b><br><small>Running and answering.</small></div></div>
+    <div class="card light"><span class="dot y"></span><div><b>Yellow: SUSPENDED</b><br><small>Sleeping (hibernated). Wakes in seconds.</small></div></div>
+    <div class="card light"><span class="dot e"></span><div><b>Grey: ERROR</b><br><small>Broken, frozen, or missing.</small></div></div>
+    <div class="card light"><span class="dot d"></span><div><b>Dark: OFF</b><br><small>Switched off.</small></div></div>
+    <div class="card light"><span class="dot b"></span><div><b>Blinking</b><br><small>Busy starting or saving. Wait.</small></div></div>
+  </div>
+  <p class="muted">Normal day: Primary <b style="color:var(--green)">green</b>, Secondary <b>dark (OFF)</b>, ready to take over.
+  The coloured dot in the taskbar corner shows the same at a glance: green is fine, amber means look, red means act now.</p>
+
+  <h2>2. Read the banner</h2>
+  <p>The wide bar at the top always says, in one sentence, what is going on. If it is
+  <b style="color:#4ade80">green</b> you are done. If it is <b style="color:#fbbf24">amber</b> or
+  <b style="color:var(--red)">red</b>, it tells you which button to press.</p>
+
+  <h2>3. The buttons</h2>
+  <div class="card">
+  <table>
+    <tr><th></th><th>Button</th><th>When to use it</th></tr>
+    <tr><td><span class="num">1</span></td><td>Turn ON Primary</td><td>After a failover, once the Primary problem is fixed. If the Primary is frozen, this button turns orange and says <b>Restart Primary</b>.</td></tr>
+    <tr><td><span class="num">2</span></td><td>Turn ON Secondary</td><td>Only while the Primary is OFF (both VMs use the same IP address). Normally the watchdog does this for you.</td></tr>
+    <tr><td><span class="num">3</span></td><td>Turn OFF Secondary</td><td>Shut the spare down cleanly (nothing is lost). It only works while the Primary is green, so nobody loses service.</td></tr>
+    <tr><td><span class="num">4</span></td><td>Planned stop of Primary</td><td>Before patching or restarting the Primary. Choose <b>Yes</b> to move users to the Secondary first. No alarm is raised.</td></tr>
+    <tr><td><span class="num">5</span></td><td>Pause / resume auto-failover</td><td>Maintenance mode: the watchdog only watches. <b>Always resume it afterwards.</b></td></tr>
+    <tr><td><span class="num">6</span></td><td>What happened</td><td>The history in plain English, newest first.</td></tr>
+    <tr><td><span class="num">7</span></td><td>VM hand-off history</td><td>Every time one VM stopped and the other took over, and how long it took.</td></tr>
+    <tr><td><span class="num">8</span></td><td>Failover test (dry run)</td><td>Shows what would happen if the Primary failed right now. Changes nothing. Safe to press any time.</td></tr>
+    <tr><td><span class="num">9</span></td><td>Open VM console</td><td>See the screen of either VM.</td></tr>
+  </table>
+  </div>
+  <p class="muted">A greyed-out button tells you, in yellow text, why it cannot be used right now. You can also press the number keys 1-9.</p>
+
+  <h2>4. When something goes wrong</h2>
+  <div class="card warn"><b>"Primary is DOWN ... Secondary is serving."</b><br>
+    Users are fine. Fix or restart the Primary, then press <span class="num">1</span>. Two minutes after the Primary is
+    starting again, VM Switcher holds it paused for a moment (its light is yellow), shuts the Secondary down cleanly, then lets the Primary continue. Both VMs use the same IP address, so they never run together, and no data is lost.</div>
+  <div class="card bad"><b>"NOBODY IS SERVING."</b><br>
+    Press <span class="num">1</span>. If the Primary will not start, press <span class="num">2</span>. Then call IT.</div>
+  <div class="card warn"><b>"The watchdog service is not running."</b><br>
+    There is no automatic protection. Restart the server, or open <code>services.msc</code> and start <b>VM Switcher Watchdog</b>.</div>
+
+  <h2>5. Practise (fire drill)</h2>
+  <p>Install VM Switcher in <b>Demo / training</b> mode on any PC. A purple panel appears with buttons such as
+  <i>Crash the Primary</i>. Press one and watch the lights, the banner, and the history react, exactly as they would for real.
+  Nothing real is touched.</p>
+
+  <h2>6. Good to know</h2>
+  <ul>
+    <li>Every button press is recorded with the Windows user name. See the <i>Actions by people</i> tab.</li>
+    <li>Closing the window keeps VM Switcher in the taskbar corner, so pop-ups still appear. Protection runs in the background either way.</li>
+    <li>VM Switcher never jumps in front of your work. When something happens, its taskbar button flashes and a small pop-up appears in the corner.</li>
+    <li>A grey card with a <b>?</b> means the other server cannot be reached. If that server is really down, the Secondary is started automatically.</li>
+    <li>Servers often have no speakers. The red strip and the pop-up are the alarm; the sound is a bonus.</li>
+    <li>After a server reboot, VM Switcher waits 5 minutes for Hyper-V to start the Primary before it fails over.</li>
+    <li>Settings live in <code>C:\ProgramData\VMSwitcher\config.json</code>. Restart the <b>VM Switcher Watchdog</b> service after you change them.</li>
+    <li>Logs: <code>C:\ProgramData\VMSwitcher\logs</code> and the Windows Event Viewer, under Application, source <code>VMSwitcher</code>.</li>
+    <li>Terminal users: <code>VMSwitcherTerminal.exe 3</code> runs option 3 directly, for scripts.</li>
+  </ul>
+</main>
+</body>
+</html>

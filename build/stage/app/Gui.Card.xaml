@@ -1,0 +1,48 @@
+﻿<Border xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Grid.Column="@COL@" x:Name="@R@_Card" Background="#111A2E" CornerRadius="16" BorderBrush="#1E2A44" BorderThickness="2" Padding="18,16" Margin="4,4,4,4">
+  <Grid>
+    <Grid.ColumnDefinitions><ColumnDefinition Width="Auto"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+    <!-- Computer icon with a status lamp -->
+    <Grid Width="150" Height="138" VerticalAlignment="Top">
+      <Viewbox Width="140" HorizontalAlignment="Left" VerticalAlignment="Top">
+        <Canvas Width="120" Height="108">
+          <Rectangle Canvas.Left="2" Canvas.Top="2" Width="116" Height="78" RadiusX="9" RadiusY="9" Fill="#1F2937" Stroke="#475569" StrokeThickness="3"/>
+          <Rectangle x:Name="@R@_Screen" Canvas.Left="10" Canvas.Top="10" Width="100" Height="62" RadiusX="4" RadiusY="4" Fill="#0B1220"/>
+          <TextBlock x:Name="@R@_ScreenText" Canvas.Left="10" Canvas.Top="24" Width="100" TextAlignment="Center" FontSize="26" FontWeight="Bold" Foreground="#E2E8F0"/>
+          <Path Data="M52,80 L68,80 L72,96 L48,96 Z" Fill="#475569"/>
+          <Rectangle Canvas.Left="30" Canvas.Top="96" Width="60" Height="9" RadiusX="4" RadiusY="4" Fill="#64748B"/>
+        </Canvas>
+      </Viewbox>
+      <Ellipse x:Name="@R@_Lamp" Width="50" Height="50" HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="0,0,0,0"
+               Stroke="#0B1220" StrokeThickness="5" Fill="#1F2937">
+        <Ellipse.Effect><DropShadowEffect ShadowDepth="0" BlurRadius="34" Color="#22C55E" Opacity="0"/></Ellipse.Effect>
+      </Ellipse>
+    </Grid>
+
+    <StackPanel Grid.Column="1" Margin="16,0,0,0">
+      <StackPanel Orientation="Horizontal">
+        <Border Background="#1E3A5F" CornerRadius="6" Padding="9,2">
+          <TextBlock Text="@ROLE@" Foreground="#7DD3FC" FontWeight="Bold" FontSize="14"/>
+        </Border>
+        <TextBlock x:Name="@R@_Sub" Foreground="#94A3B8" Margin="10,0,0,0" VerticalAlignment="Center" FontSize="13"/>
+      </StackPanel>
+      <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
+        <TextBlock x:Name="@R@_Symbol" FontSize="24" FontWeight="Bold" Margin="0,0,10,0" VerticalAlignment="Center" Foreground="#94A3B8"/>
+        <TextBlock x:Name="@R@_Label" Text="HEALTH STATUS: ..." FontSize="21" FontWeight="Bold" Foreground="#94A3B8" VerticalAlignment="Center" TextWrapping="Wrap"/>
+      </StackPanel>
+      <TextBlock x:Name="@R@_Summary" Foreground="#CBD5E1" FontSize="14" TextWrapping="Wrap" Margin="0,6,0,10" MinHeight="38"/>
+      <Grid>
+        <Grid.ColumnDefinitions><ColumnDefinition Width="104"/><ColumnDefinition Width="*"/></Grid.ColumnDefinitions>
+        <Grid.RowDefinitions><RowDefinition/><RowDefinition/><RowDefinition/><RowDefinition/></Grid.RowDefinitions>
+        <TextBlock Grid.Row="0" Text="VM name" Foreground="#64748B" FontSize="13"/>
+        <TextBlock Grid.Row="0" Grid.Column="1" x:Name="@R@_Name" Foreground="#E2E8F0" FontSize="13" TextTrimming="CharacterEllipsis"/>
+        <TextBlock Grid.Row="1" Text="Server" Foreground="#64748B" FontSize="13"/>
+        <TextBlock Grid.Row="1" Grid.Column="1" x:Name="@R@_Ip" Foreground="#E2E8F0" FontSize="13"/>
+        <TextBlock Grid.Row="2" Text="Heartbeat" Foreground="#64748B" FontSize="13"/>
+        <TextBlock Grid.Row="2" Grid.Column="1" x:Name="@R@_Ping" Foreground="#E2E8F0" FontSize="13"/>
+        <TextBlock Grid.Row="3" Text="Hyper-V" Foreground="#64748B" FontSize="13"/>
+        <TextBlock Grid.Row="3" Grid.Column="1" x:Name="@R@_State" Foreground="#E2E8F0" FontSize="13"/>
+      </Grid>
+    </StackPanel>
+  </Grid>
+</Border>
