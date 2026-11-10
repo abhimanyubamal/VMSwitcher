@@ -40,13 +40,12 @@
   <p class="lead">One page. Read it once and you can run the system.</p>
 
   <div class="card">
-    <b>What it does.</b> Two virtual machines run the VirtuoSIS IICC service. The <b>Primary</b> normally serves everyone.
+    <b>What it does.</b> Two virtual machines run the same service. The <b>Primary</b> normally serves everyone.
     The <b>Secondary</b> is the spare and is normally OFF. If the Primary stops or freezes, or its whole server goes down,
     VM Switcher wakes the Secondary within about 10 seconds. You do not need to do anything for that to happen.
   </div>
   <div class="card">
-    <b>Two servers, same app.</b> The Primary runs on server <code>10.10.140.160</code> and the Secondary on server
-    <code>10.10.140.140</code>. VM Switcher is installed on both and they keep each other informed, so you can use
+    <b>Two servers, same app.</b> The Primary runs on one Hyper-V server and the Secondary on another. VM Switcher is installed on both and they keep each other informed, so you can use
     <b>either</b> server: you see both VMs and every button works on both. The top line says which server you are on.
     The pill <i>Other server: connected</i> must be green.
   </div>

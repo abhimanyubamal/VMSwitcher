@@ -1,8 +1,8 @@
 #requires -Version 5.1
 # VMSwitcher core module (v2: two Hyper-V hosts, two cooperating apps).
 #
-#   Host 10.10.140.160 runs the PRIMARY VM   (VirtuoSIS_16.0.0_IICC)
-#   Host 10.10.140.140 runs the SECONDARY VM (VirtuoSIS_16.0.0_IICC_STANDBY)
+#   One Hyper-V server runs the PRIMARY VM, another runs the SECONDARY VM.
+#   Names and server IPs come from config.json (entered in the installer; there are no defaults).
 #
 # The app is installed on both hosts. Each copy controls ONLY its own host's Hyper-V and learns
 # about the other VM by asking the other copy (small HTTP endpoint, HMAC-signed with a shared key).
@@ -180,7 +180,7 @@ function Get-VmsPeerAddress {
 }
 
 function Get-VmsServerLabel([string]$Role) {
-    <# "10.10.140.160 (this server)" or "10.10.140.140 (other server)". #>
+    <# "192.168.1.10 (this server)" or "192.168.1.11 (other server)". #>
     $h = [string](Get-VmsVmConfig $Role).Host
     if (Test-VmsRoleIsLocal $Role) { return "$h (this server)" }
     return "$h (other server)"
@@ -1297,7 +1297,7 @@ function Get-VmsWatchdogDecision {
         $took = ($Now - $st.HoldSince).TotalSeconds
         $sOff = [bool]($s.Reachable -and (-not $s.Exists -or $s.State -eq 'Off'))
         if ($sOff) {
-            $held = [bool]($st.Flags['HeldPrimary'] -or ($p.Reachable -and $p.State -eq 'Paused'))
+            $held = [bool]($p.Reachable -and $p.State -eq 'Paused')   # resume only a held (paused) Primary, never restart a crashed one
             if ($held) { Add-Act @{ Type = 'ReleasePrimary'; Reason = 'the Secondary is OFF' } }
             Add-Act @{ Type = 'CloseHandoff'; By = 'Watchdog (automatic failback)' }
             Add-Act @{ Type = 'EndFailback' }

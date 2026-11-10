@@ -12,6 +12,8 @@ $servers = [ordered]@{
 function Use-Server([string]$Id) {
     $h = $servers[$Id]
     $env:VMSWITCHER_HOME = "$Base\$Id"; $env:VMSWITCHER_LOCALROLE = $h.Role; $env:VMSWITCHER_INSTANCE = $Id
+    $dir = Join-Path $Base $Id
+    if (-not (Test-Path (Join-Path $dir 'config.json'))) { New-Item -ItemType Directory -Force $dir | Out-Null; Set-Content (Join-Path $dir 'config.json') '{ "Primary": { "Name": "DEMO-PRIMARY", "Host": "10.0.0.1" }, "Secondary": { "Name": "DEMO-SECONDARY", "Host": "10.0.0.2" } }' -Encoding ASCII }
     $env:VMSWITCHER_LISTENPORT = [string]$h.Listen; $env:VMSWITCHER_PEERPORT = [string]$h.Peer; $env:VMSWITCHER_PEERADDRESS = '127.0.0.1'
     $env:VMSWITCHER_PROVIDER = 'Simulated'; $env:VMSWITCHER_KEY = 'demo-shared-key'
     if ($Shot) { $env:VMSWITCHER_MUTE = '1' }

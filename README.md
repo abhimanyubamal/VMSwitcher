@@ -1,84 +1,189 @@
-<<<<<<< HEAD
 # VMSwitcher
-VM Switcher is Windows Service used to monitor two Hyper-V manager VMs and turn the backup VM 'ON' if the primary VM fails and then turn the secondary OFF automatically when the Primary VM gets back ON. It also has a GUI and a terminal UI with which you can control its other features.
-=======
-# VM Switcher 2.4
 
-Active/standby failover for two Hyper-V virtual machines that run on **two different Windows Server 2016 hosts**.
+VM Switcher is a Windows service that monitors two Hyper-V VMs. It turns the backup (Secondary) VM ON if the Primary VM fails, and turns the Secondary OFF automatically, and safely, when the Primary comes back ON. It also has a windowed app (GUI) and a terminal menu for its other features.
 
-| Server | VM | Role |
-|---|---|---|
-| 10.10.140.160 | `VirtuoSIS_16.0.0_IICC` | Primary |
-| 10.10.140.140 | `VirtuoSIS_16.0.0_IICC_STANDBY` | Secondary |
+The two VMs run on **two different Hyper-V servers** (Windows Server 2016 or newer). VM Switcher is installed on **both** servers, and the two copies talk to each other. There are **no built-in VM names or IP addresses**: you type them in the installer (see [Choose your own Primary and Secondary](#choose-your-own-primary-and-secondary)).
 
-VM Switcher is installed on **both** servers. Each copy:
-
-- controls only **its own** server's Hyper-V (start, save, stop, restart of its local VM);
-- reads its VM's health from the **Hyper-V heartbeat** integration service;
-- talks to the copy on the other server every 3 seconds over TCP 47160, with HMAC-SHA256 signing and a shared key typed into both installers, and pings that server once (`ping -n 1` equivalent);
-- shows both VMs in the windowed app (`VMSwitcher.exe`) and the numbered terminal (`VMSwitcherTerminal.exe`). Buttons act on whichever server holds the VM.
-
-```
- 10.10.140.160 (Primary VM)                      10.10.140.140 (Secondary VM)
- VMSwitcherWatchdog service  <-- TCP 47160 -->   VMSwitcherWatchdog service
- local Hyper-V only            HMAC + key        local Hyper-V only
-```
-
-## Rules
-
-| Situation | What happens |
+| Role | What you enter |
 |---|---|
-| Primary VM OFF/saved/critical, not stopped through VM Switcher | Secondary turned ON on the next check (about 3 to 6 s) |
-| Primary VM running but heartbeat lost for 3 checks | Same failover (about 9 s) |
-| Primary's server silent: no ping **and** no VM Switcher for 3 checks | Secondary's server turns the Secondary ON (about 9 to 12 s) |
-| Primary's server pings but its VM Switcher is silent | Warning only, no failover (the Primary may be fine) |
-| Contact returns and both VMs are ON | "BOTH VMs are ON" alert, then failback after 2 min |
-| Primary starts again after a failover | **Safe failback**: the booting Primary is held PAUSED within about 1-3 s (nothing lost; measured 0.6-1.1 s in tests), the Secondary shuts down CLEANLY (data saved), then the Primary resumes. The shared IP address is never used twice. |
-| Both VMs ON at any time (they share one IP address) | Same safe failback; a long-running Primary is not paused |
-| Secondary does not finish its clean shutdown in 300 s (`ShutdownTimeoutSeconds`) | Hyper-V powers it off (last resort, Windows inside is hung) |
-| Primary frozen (heartbeat lost) | Primary powered OFF first, then Secondary started |
-| Server rebooted less than 5 min ago, Primary still OFF | Waits for Hyper-V auto-start |
-| Maintenance mode (option 5) | Set on both servers; watch and log only |
+| Primary (normally serves users) | the Primary VM's name in Hyper-V Manager, and the IP address of the server it runs on |
+| Secondary (backup) | the Secondary VM's name, and the IP address of its server |
 
-Both watchdogs may decide. The server that holds a VM always performs the action under its own lock, and repeated requests are harmless no-ops.
-Hand-off history is kept on the Secondary's server; the app shows it on both.
-Alerts **never** bring the window to the front or un-minimize it. They flash the taskbar button and show a tray pop-up.
+The automatic failover and failback run in the **VM Switcher Watchdog** Windows service. They keep working when the app and the terminal are closed, and when nobody is signed in.
 
-## Menu options
+---
 
-1 Turn ON Primary (becomes *Restart Primary* when frozen) · 2 Turn ON Secondary (only while the Primary is OFF) · 3 Turn OFF Secondary (clean shutdown, only if Primary healthy) · 4 Planned stop of Primary (clean shutdown; optional switchover: Primary fully OFF, then Secondary ON) · 5 Pause/resume auto-failover · 6 Event log (both servers merged) · 7 Hand-off history · 8 Failover dry run · 9 Open VM console · 0 Exit
+## 1. Using it from the terminal
 
-## Layout
+Open **VM Switcher Terminal** from the Start menu or the desktop. It asks for administrator rights, because controlling Hyper-V needs them. You can also run `C:\Program Files\VMSwitcher\VMSwitcherTerminal.exe` directly.
+
+The top of the screen refreshes every 3 seconds. It shows which server you are on, whether the other server is connected, and a status light for each VM.
 
 ```
-src/VMSwitcher.Core.psm1   config, roles, SQLite, providers, heartbeat health, peer client/protocol, failover brain, actions
-src/Watchdog.ps1           3-second loop (run by the service), starts the peer endpoint
-src/PeerServer.ps1         TCP listener for the other server (one runspace per request)
-src/Terminal.ps1           console menu
-src/Gui.ps1, Gui*.xaml     WPF app + tray notifier + demo "fire drill" panel
+  VM SWITCHER   HV-SERVER-2 holds the SECONDARY                   14:02:11
+  Other server 192.168.1.10: connected
+  PRIMARY    ██ HEALTH STATUS: OK          MyApp-Main
+  SECONDARY  ░░ HEALTH STATUS: OFF         MyApp-Backup
+   1  Turn ON Primary
+   2  Turn ON Secondary
+   3  Turn OFF Secondary
+   ...
+   0  Exit
+```
+
+Press a number to run an option. Options that are not allowed right now are greyed out, with the reason next to them. If the watchdog service has stopped, the screen says **press W to start it**.
+
+| Key | Option | What it does |
+|---|---|---|
+| 1 | Turn ON Primary | Starts the Primary. If the Secondary is ON, it is shut down **cleanly first**, because both VMs use the same IP address. When the Primary is frozen, this option becomes *Restart Primary*. |
+| 2 | Turn ON Secondary | Allowed only while the Primary is OFF. |
+| 3 | Turn OFF Secondary | Clean shutdown of the Secondary. Allowed only while the Primary is healthy. |
+| 4 | Planned stop of Primary | Clean shutdown with no failover alarm. It can switch users to the Secondary: the Primary is turned fully OFF first, then the Secondary is turned ON. |
+| 5 | Pause / resume auto-failover | Maintenance mode on **both** servers: the watchdog only watches and logs. |
+| 6 | What happened | Plain-English history from both servers. |
+| 7 | VM hand-off history | Every failover and failback, with the gap in seconds. |
+| 8 | Failover test (dry run) | Explains what would happen right now. Changes nothing. |
+| 9 | Open VM console | Shows the screen of either VM. |
+| 0 | Exit | Closes the terminal. Protection keeps running. |
+
+**One option without the menu, for scripts and scheduled tasks.** The exit code is `0` when the option succeeds and `1` when it is refused or fails.
+
+```powershell
+VMSwitcherTerminal.exe 8                  # failover test
+VMSwitcherTerminal.exe 3 -Yes             # turn OFF the Secondary, no question asked
+VMSwitcherTerminal.exe 4 -Yes -Switchover # planned switch to the Secondary
+VMSwitcherTerminal.exe 9 -Vm Secondary    # open the Secondary's screen
+```
+
+---
+
+## 2. Installing and using the windowed app (GUI)
+
+### Install (on both servers)
+
+1. Copy `dist\VMSwitcher-Setup-<version>.exe` to **both** Hyper-V servers.
+2. On the **Secondary's** server, run it as an administrator:
+   - **Page 1, "Which server is this?"**: choose SECONDARY server. (On a re-run, the installer pre-selects it from the machine's own IP address.)
+   - **Page 2**: type the Primary and Secondary VM names (exactly as in Hyper-V Manager) and the IP addresses of their two servers. There are no defaults. They must be **the same on both servers**. (On a re-run, page 2 shows the values from the server's current settings. Settings left by an old 1.x version are ignored, so the page starts empty.)
+   - **Page 3**: a **shared key** of at least 12 characters. It proves to each server that the other one is genuine.
+3. On the **Primary's** server, run the installer again with the **same values and the same key**.
+4. After each install, a **self-test report** opens. Every line should say `OK`. On the second server it should also say "the shared keys match". Fix any `FAIL` line before going live.
+5. On the Primary's server, give Hyper-V 60 seconds before it auto-starts the Primary after a reboot. VM Switcher is then already running and can keep the two VMs from using the shared IP address together:
+
+   ```powershell
+   Set-VM -Name '<Primary VM name>' -AutomaticStartDelay 60
+   ```
+
+The installer opens TCP port 47160 and ping in the Windows Firewall, **only for the other server**. Any other firewall between the servers must allow these too.
+
+Unattended install, for example:
+
+```powershell
+VMSwitcher-Setup-<version>.exe /VERYSILENT /ROLE=SECONDARY /SHAREDKEY="..." /PRIMARYNAME="..." /PRIMARYIP=... /SECONDARYNAME="..." /SECONDARYIP=...
+```
+
+Use `/ROLE=PRIMARY` on the other server, or `/ROLE=DEMO` for a training PC. All four VM switches are required; without them an unattended install stops (unless the server already has them from an earlier install).
+
+### Use
+
+Open **VM Switcher** from the desktop. It also starts in the system tray (bottom-right corner) when an administrator signs in.
+
+- **Two computer cards, one per VM**, each with a status light:
+  - **Green:** OK.
+  - **Yellow:** suspended or paused. During a failback, yellow means VM Switcher is holding the Primary on purpose.
+  - **Grey:** error. A grey card with a **?** means the other server cannot be reached.
+  - **Dark:** OFF. This is the normal state of the Secondary.
+  - **Blinking:** the VM is busy starting or stopping.
+- **One-sentence banner:** says what is going on and, when something is wrong, which button to press.
+- **Pills at the top:** the state of the other server, the watchdog, and auto-failover. If the watchdog pill is red, click it to restart the service.
+- **Nine numbered buttons:** the same options as the terminal. You can also press 1-9 on the keyboard. A greyed button says in yellow why it cannot be used right now.
+- **Tabs at the bottom:** *What happened*, *VM hand-offs*, *Actions by people* (every click, with the Windows user name), and *Light changes*.
+- **Alerts never jump in front of your work.** A tray pop-up appears, the taskbar button flashes, and a red strip waits in the window until you click **Got it**.
+- **Closing the window keeps VM Switcher in the tray.** Protection never depends on the window.
+
+**Training PC (no real VMs):** choose **Training PC** on page 1 of the installer. A purple *fire drill* panel then lets you crash the Primary, freeze it, or cut the network, and watch exactly what would happen. Nothing real is touched.
+
+---
+
+## 3. How to get the best out of it
+
+- **Leave it alone.** On a normal day the Primary is green and the Secondary is dark (OFF). Failover and failback are automatic.
+- **Before planned work on the Primary**, use option **4**, not Hyper-V Manager. There is no false alarm, and users can be moved to the Secondary.
+- **For longer maintenance**, use option **5** (pause auto-failover), and press **5** again afterwards. The pill shows **PAUSED** in amber as a reminder.
+- **Press 8 now and then.** The dry run is a free health check.
+- **Read *What happened* after any incident.** It is written in plain English and covers both servers.
+- **Keep the Hyper-V Heartbeat service enabled** in both VMs (VM Settings > Integration Services). VM Switcher reads VM health from it.
+- **Keep the servers' clocks in sync** (Windows Time). A difference of more than 5 minutes makes the servers refuse each other.
+- **Logs**, if you need them: `C:\ProgramData\VMSwitcher\logs\` and Event Viewer > Windows Logs > Application > source `VMSwitcher`.
+
+### What happens, and when
+
+| Situation | What VM Switcher does |
+|---|---|
+| Primary turned OFF or crashed (not through VM Switcher) | Secondary turned ON at the next check (about 3 s) |
+| Primary frozen: heartbeat lost for 3 checks | Frozen Primary powered off, then Secondary turned ON |
+| Primary's whole server silent (no ping, no VM Switcher) for 3 checks | Secondary's server turns the Secondary ON (about 9-12 s) |
+| Primary's server pings but its VM Switcher does not answer | Warning only, no failover |
+| Primary starts again after a failover | **Safe failback**: the booting Primary is held PAUSED within about 1-3 s (nothing is lost), the Secondary shuts down **cleanly** (its data is saved), then the Primary continues. The two VMs never use the shared IP address at the same time. |
+| Both VMs found ON together | Same safe failback |
+| Secondary does not finish shutting down within 300 s | Hyper-V powers it off. This is the last resort: Windows inside it is hung. |
+| Server rebooted less than 5 minutes ago and Primary still OFF | Waits for Hyper-V to auto-start the Primary |
+
+---
+
+## Choose your own Primary and Secondary
+
+Every part of VM Switcher reads the VM names and server IPs from its settings, so any pair of VMs on any two servers can be protected. Nothing is built in.
+
+**The easy way:** run the installer again on **both** servers. Page 2 shows the current values (only when the settings file has both VM names and both server IPs; otherwise the page is empty). Change them, leave the shared key empty to keep it (or type a new one on both), and finish. Settings such as timings are kept.
+
+**By hand:** edit `C:\ProgramData\VMSwitcher\config.json` on **both** servers. The two files must contain the same values.
+
+```json
+"Primary":   { "Name": "MyApp_MAIN",   "Host": "192.168.50.11" },
+"Secondary": { "Name": "MyApp_BACKUP", "Host": "192.168.50.12" },
+```
+
+Then restart the service on both servers:
+
+```powershell
+Restart-Service VMSwitcherWatchdog
+```
+
+Re-run the installer as well if a server's IP address changed. The firewall rules allow only the other server's address.
+
+Other settings in the same file:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `CheckIntervalSeconds` | 3 | Normal check interval |
+| `FastCheckIntervalSeconds` | 1 | Check interval while a failover or failback is active |
+| `MissedPingsForFailover` | 3 | Missed checks before failing over |
+| `ShutdownTimeoutSeconds` | 300 | Time for a clean shutdown before the last-resort power-off |
+| `HostBootGraceSeconds` | 300 | Wait after a server reboot before any failover |
+| `ListenPort` / `PeerPort` | 47160 | Port used between the two copies |
+
+---
+
+## For developers
+
+```
+src/VMSwitcher.Core.psm1   settings, roles, SQLite, Hyper-V and simulated providers, health, peer protocol, failover logic, actions
+src/Watchdog.ps1           the check loop (run by the service), starts the peer endpoint
+src/PeerServer.ps1         TCP endpoint for the other server
+src/Terminal.ps1           terminal menu
+src/Gui.ps1, Gui*.xaml     windowed app, tray notifier, fire-drill panel
 src/lib/VmsSqlite.cs       wrapper over Windows' built-in winsqlite3.dll
-src/native/*.cs            launchers and service host (in-box csc.exe)
-setup/install.ps1          config + DPAPI key, firewall, service, logon task, self-test
+src/native/*.cs            launchers and service host (built with the in-box csc.exe)
+setup/install.ps1          settings, encrypted key, firewall, service, tray task, self-test
 installer/VMSwitcher.iss   Inno Setup script
-build/build.ps1            builds dist/VMSwitcher-Setup-<ver>.exe
-tests/                     Pester: single-server, two-server decisions, live two-process test
+build/build.ps1            builds dist/VMSwitcher-Setup-<version>.exe
+tests/                     Pester tests, including a live two-server test
+docs/                      operator guide and live test sheet
 ```
 
-## Build and test
-
 ```powershell
-powershell -ExecutionPolicy Bypass -File build\build.ps1 -Version 2.4.0
+powershell -ExecutionPolicy Bypass -File build\build.ps1 -Version 2.5.2          # needs Inno Setup 6
 powershell -Command "Import-Module Pester -RequiredVersion 3.4.0; Invoke-Pester tests"
+powershell -ExecutionPolicy Bypass -File tests\Start-TwoServerDemo.ps1           # two servers simulated on one PC
 ```
-
-Two-server demo on one PC (two watchdogs and two windows, simulated VMs):
-
-```powershell
-powershell -ExecutionPolicy Bypass -File tests\Start-TwoServerDemo.ps1
-```
-
-Unattended install, run on each server with the same key:
-`VMSwitcher-Setup-2.4.0.exe /VERYSILENT /ROLE=PRIMARY /SHAREDKEY=...` on 10.10.140.160 and `/ROLE=SECONDARY` on 10.10.140.140 (`/ROLE=DEMO` for a training PC).
-
-The installer's first page asks **Which server is this?** and pre-selects the answer from the machine's own IP address.
->>>>>>> bef5e4d ( VM Switching service for Windows for Hyper-V Manager VMs)

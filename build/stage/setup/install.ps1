@@ -7,10 +7,10 @@
 #>
 param(
     [Parameter(Mandatory)][string]$InstallDir,
-    [string]$PrimaryName = 'VirtuoSIS_16.0.0_IICC',
-    [string]$PrimaryHost = '10.10.140.160',
-    [string]$SecondaryName = 'VirtuoSIS_16.0.0_IICC_STANDBY',
-    [string]$SecondaryHost = '10.10.140.140',
+    [string]$PrimaryName = '',      # no defaults: the installer passes what the person typed
+    [string]$PrimaryHost = '',
+    [string]$SecondaryName = '',
+    [string]$SecondaryHost = '',
     [string]$SharedKeyFile = '',
     [int]$Port = 47160,
     [ValidateSet('Auto', 'Primary', 'Secondary', 'Both')][string]$Role = 'Auto',   # chosen on the installer's first page
@@ -22,6 +22,12 @@ $TaskName = 'VM Switcher Tray'
 $Data = Join-Path $env:ProgramData 'VMSwitcher'
 $Report = New-Object System.Collections.ArrayList
 function Note([string]$Status, [string]$Text) { [void]$Report.Add(('{0,-6} {1}' -f $Status, $Text)) }
+
+if (-not ($PrimaryName -and $PrimaryHost -and $SecondaryName -and $SecondaryHost)) {
+    New-Item -ItemType Directory -Force -Path $Data | Out-Null
+    [IO.File]::WriteAllText((Join-Path $Data 'selftest.txt'), "VM Switcher - installation self-test`r`n`r`nFAIL   The Primary and Secondary VM names and server IP addresses were not given. Run the installer again and fill them in.`r`n", (New-Object Text.UTF8Encoding($false)))
+    exit 1
+}
 
 # 1. Data folder: only SYSTEM and Administrators (logs show who did what).
 New-Item -ItemType Directory -Force -Path $Data, (Join-Path $Data 'logs') | Out-Null
@@ -104,7 +110,7 @@ if ($existing) {
 } else {
     & sc.exe create $ServiceName binPath= "`"$svcExe`"" start= auto DisplayName= 'VM Switcher Watchdog' | Out-Null
 }
-& sc.exe description $ServiceName 'Watches the VirtuoSIS Primary and Secondary VMs (on this server and the other server) every 3 seconds and turns ON the Secondary if the Primary fails.' | Out-Null
+& sc.exe description $ServiceName 'Watches the Primary and Secondary VMs (on this server and the other server) every 3 seconds and turns ON the Secondary if the Primary fails.' | Out-Null
 # Real servers: start only after Hyper-V's own management service (vmms), so the first checks see real VM states.
 if (-not $Demo -and (Get-Service -Name vmms -ErrorAction SilentlyContinue)) { & sc.exe config $ServiceName depend= vmms | Out-Null }
 & sc.exe failure $ServiceName reset= 86400 actions= restart/5000/restart/5000/restart/30000 | Out-Null

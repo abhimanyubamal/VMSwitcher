@@ -2,8 +2,9 @@ BEFORE YOU INSTALL
 
 1. Install VM Switcher on BOTH Hyper-V servers (Windows Server 2016 or newer,
    signed in as an administrator):
-     10.10.140.160  runs the PRIMARY VM   (VirtuoSIS_16.0.0_IICC)
-     10.10.140.140  runs the SECONDARY VM (VirtuoSIS_16.0.0_IICC_STANDBY)
+     - the server that runs the PRIMARY VM (normally serves users)
+     - the server that runs the SECONDARY VM (backup)
+   You will type both VM names and both server IP addresses in the wizard.
    Type the SAME values and the SAME shared key on both servers.
    Each copy finds out by itself which VM it holds.
 

@@ -1,7 +1,7 @@
 # Integration test: two real watchdog processes on this PC act as the two servers.
 #   A = Primary's server   (listens 47261, peer 47262)
 #   B = Secondary's server (listens 47262, peer 47261)
-# They talk over TCP with the shared key, exactly like 10.10.140.160 and 10.10.140.140 will.
+# They talk over TCP with the shared key, exactly like the two real Hyper-V servers will.
 $ErrorActionPreference = 'Stop'
 $src = Join-Path $PSScriptRoot '..\src'
 $modulePath = Join-Path $src 'VMSwitcher.Core.psm1'
@@ -14,6 +14,7 @@ $Hosts = @{
 function Use-Server([string]$Id) {
     $h = $Hosts[$Id]
     $env:VMSWITCHER_HOME = $h.Home; $env:VMSWITCHER_LOCALROLE = $h.Role; $env:VMSWITCHER_INSTANCE = $Id
+    if (-not (Test-Path (Join-Path $h.Home 'config.json'))) { New-Item -ItemType Directory -Force $h.Home | Out-Null; Set-Content (Join-Path $h.Home 'config.json') '{ "Primary": { "Name": "TEST-PRIMARY", "Host": "10.0.0.1" }, "Secondary": { "Name": "TEST-SECONDARY", "Host": "10.0.0.2" } }' -Encoding ASCII }
     $env:VMSWITCHER_LISTENPORT = [string]$h.Listen; $env:VMSWITCHER_PEERPORT = [string]$h.Peer; $env:VMSWITCHER_PEERADDRESS = '127.0.0.1'
     $env:VMSWITCHER_PROVIDER = 'Simulated'; $env:VMSWITCHER_KEY = 'correct horse battery staple'; $env:VMSWITCHER_MUTE = '1'
     Import-Module $modulePath -Force -DisableNameChecking
@@ -98,13 +99,13 @@ Describe 'Two servers talking to each other' {
         Write-Host ("      Primary held paused after {0:N1} s; Secondary OFF (clean) after {1:N1} s; Primary released after {2:N1} s" -f $held, $off, $back)
         $held | Should BeLessThan 5
         $violations | Should Be 0                              # the Primary never ran while the Secondary was ON
-        Use-Server B
-        (Get-VmsDb).Scalar("SELECT failback_by FROM handoffs ORDER BY id DESC LIMIT 1") | Should Match 'automatic failback'
+        (Wait-Until { Use-Server B; [string](Get-VmsDb).Scalar("SELECT failback_by FROM handoffs ORDER BY id DESC LIMIT 1") -match 'automatic failback' } 10) | Should Be $true
         [int](Get-VmsDb).Scalar("SELECT COUNT(*) FROM events WHERE action IN ('StopSecondary','PeerStop')") | Should BeGreaterThan 0
         $sim = Read-VmsSim; $sim.StopSeconds = 0; Write-VmsSim $sim
     }
 
     It 'option 1 pressed on server B powers the Secondary OFF first, then starts the Primary on server A' {
+        (Wait-Until { Use-Server B; ((Get-VmsWatchdogRow).Mode -eq 'Normal') -and ($null -eq (Get-VmsIntent 'failback')) } 15) | Should Be $true
         Use-Server A
         Set-VmsSimVm -Role Primary -State Off
         (Wait-Until { (SimState B Secondary) -eq 'Running' } 15) | Should Be $true

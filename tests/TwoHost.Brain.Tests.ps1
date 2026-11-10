@@ -6,6 +6,7 @@ $modulePath = Join-Path $PSScriptRoot '..\src\VMSwitcher.Core.psm1'
 function New-World {
     $script:homeDir = Join-Path $env:TEMP ('vms-brain-' + [guid]::NewGuid().ToString('N').Substring(0, 8))
     $env:VMSWITCHER_HOME = $script:homeDir
+    New-Item -ItemType Directory -Force $script:homeDir | Out-Null; Set-Content (Join-Path $script:homeDir 'config.json') '{ "Primary": { "Name": "TEST-PRIMARY", "Host": "10.0.0.1" }, "Secondary": { "Name": "TEST-SECONDARY", "Host": "10.0.0.2" } }' -Encoding ASCII   # no built-in defaults any more
     $env:VMSWITCHER_PROVIDER = 'Simulated'
     $env:VMSWITCHER_LOCALROLE = 'Secondary'
     Import-Module $modulePath -Force -DisableNameChecking

@@ -29,8 +29,6 @@ InfoBeforeFile=..\installer\before-install.txt
 
 DisableWelcomePage=yes
 
-[Messages]
-WelcomeLabel2=This installs VM Switcher on this Hyper-V server. Install it on BOTH servers:%n  10.10.140.160 (runs the PRIMARY VM)%n  10.10.140.140 (runs the SECONDARY VM)%n%nThe two copies talk to each other every 3 seconds. If the Primary VM or its whole server fails, the Secondary VM is turned ON automatically.%n%nYou get a background watchdog service, a windowed app with health lights, and a numbered terminal menu.
 
 [Tasks]
 Name: "desktopicon"; Description: "Put VM Switcher on the desktop (recommended)"; GroupDescription: "Shortcuts:"
@@ -82,34 +80,100 @@ end;
 function HasLocalIp(Ip: String): Boolean;
 var Code: Integer;
 begin
+  Result := False;
+  if Trim(Ip) = '' then exit;
   Result := Exec(ExpandConstant('{cmd}'), '/c ipconfig | findstr /c:"' + Ip + '" >nul', '', SW_HIDE, ewWaitUntilTerminated, Code) and (Code = 0);
 end;
 
-procedure InitializeWizard;
-var R: String;
+{ Value of "Key" inside the "Section" block of the existing config.json (upgrade / re-run), or Default. }
+function CfgValueFrom(FileName, Section, Key, Default: String): String;
+var S: AnsiString; T: String; P: Integer;
 begin
+  Result := Default;
+  if not LoadStringFromFile(FileName, S) then exit;
+  T := String(S);
+  P := Pos('"' + Section + '"', T); if P = 0 then exit;
+  T := Copy(T, P + Length(Section) + 2, Length(T));
+  P := Pos('"' + Key + '"', T); if P = 0 then exit;
+  T := Copy(T, P + Length(Key) + 2, Length(T));
+  P := Pos('"', T); if P = 0 then exit;
+  T := Copy(T, P + 1, Length(T));
+  P := Pos('"', T); if P <= 1 then exit;
+  Result := Copy(T, 1, P - 1);
+end;
+
+function CfgValue(Section, Key, Default: String): String;
+begin
+  Result := CfgValueFrom(ExpandConstant('{commonappdata}\VMSwitcher\config.json'), Section, Key, Default);
+end;
+
+{ True only for a COMPLETE settings file from this version (both VM names and both server IPs).
+  An old or partial file (for example from version 1.x, which had no server IPs) is ignored, so nothing stale is shown. }
+function HasCompleteConfig: Boolean;
+begin
+  Result := (CfgValue('Primary', 'Name', '') <> '') and (CfgValue('Primary', 'Host', '') <> '') and
+            (CfgValue('Secondary', 'Name', '') <> '') and (CfgValue('Secondary', 'Host', '') <> '');
+end;
+
+{ Command-line switch first, then a complete current config.json (re-run / upgrade). There are NO built-in defaults. }
+function Pick(Param, Section, Key: String): String;
+begin
+  Result := ExpandConstant('{param:' + Param + '|}');
+  if (Result = '') and HasCompleteConfig then Result := CfgValue(Section, Key, '');
+end;
+
+{ Unattended installs must name both VMs and both servers: there is nothing to fall back to. }
+function InitializeSetup: Boolean;
+begin
+  Result := True;
+  if WizardSilent and (CompareText(ExpandConstant('{param:ROLE|}'), 'DEMO') <> 0) and
+     ((Pick('PRIMARYNAME', 'Primary', 'Name') = '') or (Pick('PRIMARYIP', 'Primary', 'Host') = '') or
+      (Pick('SECONDARYNAME', 'Secondary', 'Name') = '') or (Pick('SECONDARYIP', 'Secondary', 'Host') = '')) then
+  begin
+    SuppressibleMsgBox('VM Switcher has no default VM names or IP addresses. An unattended install needs /PRIMARYNAME, /PRIMARYIP, /SECONDARYNAME and /SECONDARYIP.', mbError, MB_OK, IDOK);
+    Result := False;
+  end;
+end;
+
+{ "10.0.0.5  -  PRIMARY server  (runs MyVM)", or just the role when the values are not known yet. }
+function RoleLabel(Ip, Role, Name: String): String;
+begin
+  Result := Role + ' server';
+  if Ip <> '' then Result := Ip + '  -  ' + Result;
+  if Name <> '' then Result := Result + '  (runs ' + Name + ')';
+end;
+
+procedure InitializeWizard;
+var R, PName, PIp, SName, SIp: String;
+begin
+  PName := Pick('PRIMARYNAME', 'Primary', 'Name');
+  PIp := Pick('PRIMARYIP', 'Primary', 'Host');
+  SName := Pick('SECONDARYNAME', 'Secondary', 'Name');
+  SIp := Pick('SECONDARYIP', 'Secondary', 'Host');
+
   { FIRST question of the installer: which machine is this? }
   RolePage := CreateInputOptionPage(wpWelcome,
     'Which server is this?', 'Choose the machine you are installing on right now.',
-    'VM Switcher is installed on both Hyper-V servers. Each copy controls the VM on its own server and talks to the other copy.',
+    'VM Switcher is installed on both Hyper-V servers. Each copy controls the VM on its own server and talks to the other copy. The VM names and server IP addresses are entered on the next page.',
     True, False);
-  RolePage.Add('10.10.140.160  -  PRIMARY server  (runs VirtuoSIS_16.0.0_IICC)');
-  RolePage.Add('10.10.140.140  -  SECONDARY server  (runs VirtuoSIS_16.0.0_IICC_STANDBY)');
+  RolePage.Add(RoleLabel(PIp, 'PRIMARY', PName) + '  -  runs the main VM');
+  RolePage.Add(RoleLabel(SIp, 'SECONDARY', SName) + '  -  runs the backup VM');
   RolePage.Add('Training PC  -  demo only, both servers are simulated, nothing real is touched');
+  RolePage.Values[0] := False;   { nothing pre-selected unless this machine can be recognised below }
 
   VmPage := CreateInputQueryPage(RolePage.ID,
-    'Check the servers and virtual machines', 'These must be the SAME on both servers. Usually you just press Next.',
-    'VM names must match Hyper-V Manager exactly.');
+    'Servers and virtual machines', 'Type the SAME values on both servers.',
+    'VM names must match Hyper-V Manager exactly. The IP addresses are those of the two Hyper-V servers.');
   VmPage.Add('PRIMARY VM name (main):', False);
   VmPage.Add('IP address of the PRIMARY server:', False);
   VmPage.Add('SECONDARY VM name (backup):', False);
   VmPage.Add('IP address of the SECONDARY server:', False);
   { Unattended install, for example:
       VMSwitcher-Setup.exe /VERYSILENT /ROLE=PRIMARY /SHAREDKEY=...   (or /ROLE=SECONDARY, /ROLE=DEMO) }
-  VmPage.Values[0] := ExpandConstant('{param:PRIMARYNAME|VirtuoSIS_16.0.0_IICC}');
-  VmPage.Values[1] := ExpandConstant('{param:PRIMARYIP|10.10.140.160}');
-  VmPage.Values[2] := ExpandConstant('{param:SECONDARYNAME|VirtuoSIS_16.0.0_IICC_STANDBY}');
-  VmPage.Values[3] := ExpandConstant('{param:SECONDARYIP|10.10.140.140}');
+  VmPage.Values[0] := PName;
+  VmPage.Values[1] := PIp;
+  VmPage.Values[2] := SName;
+  VmPage.Values[3] := SIp;
 
   R := UpperCase(ExpandConstant('{param:ROLE|}'));
   if CompareText(ExpandConstant('{param:MODE|}'), 'DEMO') = 0 then R := 'DEMO';
@@ -129,11 +193,7 @@ begin
         'This machine has the IP address ' + Trim(VmPage.Values[3]) + ', so the SECONDARY server is selected.';
     end
     else
-    begin
-      R := 'DEMO';
-      RolePage.Description :=
-        'This machine has NEITHER server''s IP address, so Training PC is selected. If this really is one of the two servers, choose it below.';
-    end;
+      RolePage.Description := 'Choose the machine you are installing on right now.';
   end;
   if R = 'PRIMARY' then RolePage.Values[0] := True
   else if R = 'SECONDARY' then RolePage.Values[1] := True
@@ -175,7 +235,7 @@ begin
   begin
     if RoleIndex < 0 then
     begin
-      MsgBox('Please choose which server this is.', mbError, MB_OK);
+      SuppressibleMsgBox('Please choose which server this is.', mbError, MB_OK, IDOK);
       Result := False;
     end
     else if RoleIndex < 2 then
@@ -184,49 +244,59 @@ begin
       if RoleIndex = 0 then begin Mine := Trim(VmPage.Values[1]); Other := Trim(VmPage.Values[3]); end
       else begin Mine := Trim(VmPage.Values[3]); Other := Trim(VmPage.Values[1]); end;
       if (not HasLocalIp(Mine)) and HasLocalIp(Other) then
-        Result := MsgBox('This machine has the IP address ' + Other + ', but you chose the server ' + Mine + '.' + #13#10 + #13#10 +
+        Result := SuppressibleMsgBox('This machine has the IP address ' + Other + ', but you chose the server ' + Mine + '.' + #13#10 + #13#10 +
                          'Are you sure? Choosing the wrong server means VM Switcher looks for the wrong VM.' + #13#10 + #13#10 +
-                         'Yes = keep my choice      No = let me change it', mbConfirmation, MB_YESNO or MB_DEFBUTTON2) = IDYES;
+                         'Yes = keep my choice      No = let me change it', mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDYES) = IDYES;
     end;
   end;
   if (VmPage <> nil) and (CurPageID = VmPage.ID) then
   begin
     if (Trim(VmPage.Values[0]) = '') or (Trim(VmPage.Values[2]) = '') then
     begin
-      MsgBox('Please type both VM names.', mbError, MB_OK);
+      SuppressibleMsgBox('Please type both VM names.', mbError, MB_OK, IDOK);
       Result := False;
     end
     else if CompareText(Trim(VmPage.Values[0]), Trim(VmPage.Values[2])) = 0 then
     begin
-      MsgBox('The Primary and the Secondary must be two different VMs.', mbError, MB_OK);
+      SuppressibleMsgBox('The Primary and the Secondary must be two different VMs.', mbError, MB_OK, IDOK);
       Result := False;
     end
     else if not LooksLikeIp(Trim(VmPage.Values[1])) or not LooksLikeIp(Trim(VmPage.Values[3])) then
     begin
-      MsgBox('Please type the IP addresses like 10.10.140.160', mbError, MB_OK);
+      SuppressibleMsgBox('Please type the IP addresses like 192.168.1.10', mbError, MB_OK, IDOK);
       Result := False;
     end
     else if CompareText(Trim(VmPage.Values[1]), Trim(VmPage.Values[3])) = 0 then
     begin
-      MsgBox('The two VMs run on two different servers, so the two IP addresses must be different.', mbError, MB_OK);
+      SuppressibleMsgBox('The two VMs run on two different servers, so the two IP addresses must be different.', mbError, MB_OK, IDOK);
       Result := False;
+    end
+    else if RoleIndex < 2 then
+    begin
+      { Now that the IP addresses are known: does this machine really have the chosen server's IP? }
+      if RoleIndex = 0 then begin Mine := Trim(VmPage.Values[1]); Other := Trim(VmPage.Values[3]); end
+      else begin Mine := Trim(VmPage.Values[3]); Other := Trim(VmPage.Values[1]); end;
+      if (not HasLocalIp(Mine)) and HasLocalIp(Other) then
+        Result := SuppressibleMsgBox('This machine has the IP address ' + Other + ', but on the first page you chose the server ' + Mine + '.' + #13#10 + #13#10 +
+                         'Are you sure? Choosing the wrong server means VM Switcher looks for the wrong VM.' + #13#10 + #13#10 +
+                         'Yes = keep my choice      No = let me change it', mbConfirmation, MB_YESNO or MB_DEFBUTTON2, IDYES) = IDYES;
     end;
   end;
   if (KeyPage <> nil) and (CurPageID = KeyPage.ID) then
   begin
     if KeyPage.Values[0] <> KeyPage.Values[1] then
     begin
-      MsgBox('The two keys are not the same. Please type them again.', mbError, MB_OK);
+      SuppressibleMsgBox('The two keys are not the same. Please type them again.', mbError, MB_OK, IDOK);
       Result := False;
     end
     else if (KeyPage.Values[0] <> '') and (Length(KeyPage.Values[0]) < 12) then
     begin
-      MsgBox('Please use at least 12 characters for the shared key.', mbError, MB_OK);
+      SuppressibleMsgBox('Please use at least 12 characters for the shared key.', mbError, MB_OK, IDOK);
       Result := False;
     end
     else if (KeyPage.Values[0] = '') and not FileExists(ExpandConstant('{commonappdata}\VMSwitcher\config.json')) then
     begin
-      MsgBox('Please type a shared key. Both servers need the same key to talk to each other.', mbError, MB_OK);
+      SuppressibleMsgBox('Please type a shared key. Both servers need the same key to talk to each other.', mbError, MB_OK, IDOK);
       Result := False;
     end;
   end;

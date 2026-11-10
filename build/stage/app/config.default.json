@@ -1,6 +1,6 @@
 {
-  "Primary":   { "Name": "VirtuoSIS_16.0.0_IICC",         "Host": "10.10.140.160" },
-  "Secondary": { "Name": "VirtuoSIS_16.0.0_IICC_STANDBY", "Host": "10.10.140.140" },
+  "Primary":   { "Name": "", "Host": "" },
+  "Secondary": { "Name": "", "Host": "" },
   "LocalRole": "Auto",
   "Provider": "HyperV",
   "ListenPort": 47160,
